@@ -93,8 +93,8 @@ Make a plot that shows the top 25 wine consuming countries
 top_wine <- drinks %>%
   arrange(desc(wine_servings))
 
-ggplot(head(top_wine, 25), aes(x=reorder(country, -wine_servings), y = wine_servings, colour = country)) +
-  labs(y = "Servings of Beer", x = "Country", title = "Wine Consumption by Country") +
+ggplot(head(top_wine, 25), aes(x=reorder(country, wine_servings), y = wine_servings, colour = country)) +
+  labs(y = "Servings of Wine", x = "Country", title = "Wine Consumption by Country") +
   geom_bar(stat='identity', show.legend = FALSE) + 
   coord_flip()
 
@@ -104,7 +104,13 @@ ggplot(head(top_wine, 25), aes(x=reorder(country, -wine_servings), y = wine_serv
 Finally, make a plot that shows the top 25 spirit consuming countries
 ```{r spirit_plot}
 # YOUR CODE GOES HERE
+top_spirit <- drinks %>%
+  arrange(desc(spirit_servings))
 
+ggplot(head(top_spirit, 25), aes(x=reorder(country, spirit_servings), y = spirit_servings, colour = country)) +
+  labs(y = "Servings of Spirit", x = "Country", title = "Spirit Consumption by Country") +
+  geom_bar(stat='identity', show.legend = FALSE) + 
+  coord_flip()
 ```
 
 What can you infer from these plots? Don't just explain what's in the graph, but speculate or tell a short story (1-2 paragraphs max).
@@ -141,20 +147,35 @@ Besides the obvious variables of `title`, `genre`, `director`, `year`, and `dura
 - Finally, ratings. Produce a table that describes how ratings are distributed by genre. We don't want just the mean, but also, min, max, median, SD and some kind of a histogram or density graph that visually shows how ratings are distributed. 
 
 ```{r, questions}
-anyNA(movies)
-anyDuplicated(movies)
+# anyNA(movies)
+# anyDuplicated(movies)
 
 movies_by_genre <- movies %>%
   group_by(genre) %>%
   count(sort = TRUE)
 
 genre_gross_budget <- movies %>%
+  mutate(return_on_budget = gross/budget) %>%
   group_by(genre) %>%
-  summarize(mean_gross = mean(gross), mean_budget = mean(budget)) %>%
-  mutate(return_on_budget = mean_gross/mean_budget) %>%
+  summarize(mean_gross = mean(gross), mean_budget = mean(budget), mean_return = mean(return_on_budget)) %>%
   arrange(desc(return_on_budget))
 
-glimpse(genre_gross_budget)
+
+top_directors <- movies %>%
+  group_by(director) %>%
+  summarize(total = sum(gross), mean = mean(gross), median = median(gross), st_dev=STDEV(gross)) %>%
+  arrange(desc(total)) %>%
+  head(15)
+
+genre_ratings <- movies %>%
+  group_by(genre) %>%
+  summarize(min_rating = min(rating), max_rating = max(rating), 
+            mean_rating = mean(rating), median_rating = median(rating), 
+            st_dev=STDEV(rating))
+
+ggplot(movies, aes(x = rating, group = genre, fill = genre)) +
+  geom_density(alpha = .4)
+
 
 ```
 
@@ -211,7 +232,12 @@ Based on this dataset, create a table and a bar plot that shows the number of co
 ```{r companies_per_sector}
 
 # YOUR CODE GOES HERE
-  
+companies_by_sector <- nyse %>%
+  count(sector, sort = TRUE)
+ggplot(companies_by_sector, aes(x=reorder(sector, n), y = n)) +
+  labs(x = "Sector", y = "Number of Companies", title = "Amount of Companies by Sector") +
+  geom_bar(stat = 'identity', show.legend = FALSE) +
+  coord_flip() + theme_minimal()
 
 ```
 
@@ -222,7 +248,7 @@ Next, let's choose some stocks and their ticker symbols and download some data. 
 # Notice the cache=TRUE argument inthe chunk options. Because getting data is time consuming, 
 # cache=TRUE means that once it downloads data, the chunk will not run again next time you knit your Rmd
 
-myStocks <- c("AAPL","JPM","DIS","DPZ","ANF","TSLA","XOM","SPY" ) %>%
+myStocks <- c("GOOG","RY","AZN","BP","DAL","TM","AMZN","SPY" ) %>%
   tq_get(get  = "stock.prices",
          from = "2011-01-01",
          to   = "2020-08-31") %>%
@@ -269,7 +295,11 @@ Create a table where you summarise monthly returns for each of the stocks and `S
 ```{r summarise_monthly_returns}
 
 # YOUR CODE GOES HERE
-
+monthly_summary <- myStocks_returns_monthly %>%
+  group_by(symbol) %>%
+  summarize(min = min(monthly_returns), max = max(monthly_returns), median = median(monthly_returns),
+            mean = mean(monthly_returns), SD = StdDev(monthly_returns))
+monthly_summary
 ```
 
 
@@ -277,10 +307,16 @@ Plot a density plot, using `geom_density()`, for each of the stocks
 ```{r density_monthly_returns}
 
 # YOUR CODE GOES HERE
+ggplot(myStocks_returns_monthly, aes(monthly_returns*100, fill = symbol)) +
+  labs(y = "Density", x = "Monthly Return (%)", title = "Density of Monthly Returns") +
+  geom_density() + 
+  facet_wrap(~symbol) +
+  theme_minimal()
 
 ```
 
 What can you infer from this plot? Which stock is the riskiest? The least risky? 
+
 
 > TYPE YOUR ANSWER AFTER (AND OUTSIDE!) THIS BLOCKQUOTE.
 
@@ -288,6 +324,15 @@ Finally, make a plot that shows the expected monthly return (mean) of a stock on
 
 ```{r risk_return_plot}
 # YOUR CODE GOES HERE
+
+ggplot(myStocks_returns_monthly %>% 
+         group_by(symbol) %>%
+         summarize(expected = mean(monthly_returns), st_dev = STDEV(monthly_returns))
+       , aes(x = st_dev,  y = expected, label = symbol, color = symbol)) +
+  ggrepel::geom_text_repel() +
+  labs(x = "Standard Deviation", y = "Average Monthly Return", title = "Risk vs Expected Return") +
+  geom_point()
+  
 
 ```
 
@@ -366,15 +411,70 @@ hr_cleaned <- hr_dataset %>%
 Produce a one-page summary describing this dataset. Here is a non-exhaustive list of questions:
 
 1. How often do people leave the company (`attrition`)
-1. How are `age`, `years_at_company`, `monthly_income` and `years_since_last_promotion` distributed? can you roughly guess which of these variables is closer to Normal just by looking at summary statistics? 
+```{r ibm_summary}
+hr_cleaned %>% filter(attrition == "No") %>% count()
+```
+1. How are `age`, `years_at_company`, `monthly_income` and `years_since_last_promotion` distributed? can you roughly guess which of these variables is closer to Normal just by looking at summary statistics?
+```{r ibm_summary}
+# summary(hr_cleaned)
+ggplot(hr_cleaned, aes(age)) +
+  geom_density()
+ggplot(hr_cleaned, aes(years_at_company)) +
+  geom_density()
+ggplot(hr_cleaned, aes(monthly_income)) +
+  geom_density()
+ggplot(hr_cleaned, aes(years_since_last_promotion)) +
+  geom_density()
+
+```
+Age is the closest to normally distributed, you can tell by the relatively similar median and mean values.
+
 1. How are `job_satisfaction` and `work_life_balance` distributed? Don't just report counts, but express categories as % of total
+
+```{r}
+wlb <- hr_cleaned %>%
+  count(work_life_balance, sort = TRUE) %>%
+  mutate(freq = n/sum(n))
+wlb
+```
 1. Is there any relationship between monthly income and education? Monthly income and gender?
+```{r}
+  ggplot(hr_cleaned, aes(x = education, y = monthly_income, color = education)) +
+  geom_boxplot()
+  ggplot(hr_cleaned, aes(x = gender, y = monthly_income, color = gender)) +
+  geom_boxplot()
+```
 1. Plot a boxplot of income vs job role. Make sure the highest-paid job roles appear first
+```{r}
+  ggplot(hr_cleaned, aes(x = education, y = monthly_income, color = education)) +
+  geom_boxplot()
+  ggplot(hr_cleaned, aes(x = gender, y = monthly_income, color = gender)) +
+  geom_boxplot()
+```
 1. Calculate and plot a bar chart of the mean (or median?) income by education level.
+```{r}
+edu_income <- hr_cleaned %>%
+  group_by(education) %>%
+  summarize(median = median(monthly_income))
+  ggplot(edu_income, aes(x = reorder(education, median), y = median, fill = education)) +
+  geom_bar(stat = 'identity', show.legend = F)
+ 
+```
 1. Plot the distribution of income by education level. Use a facet_wrap and a theme from `ggthemes`
+```{r}
+  ggplot(hr_cleaned, aes(x = monthly_income, color = education)) +
+  geom_density(show.legend = F) +
+  facet_wrap(~education) +
+  ggthemes::theme_economist()
+```
 1. Plot income vs age, faceted by `job_role`
-
-
+```{r}
+ggplot(hr_cleaned, aes(x = age, y = monthly_income)) +
+  geom_point(show.legend = F) +
+  geom_smooth() +
+  facet_wrap(~job_role) +
+  ggthemes::theme_wsj()
+```
 # Challenge 1: Replicating a chart
 
 The purpose of this exercise is to make a publication-ready plot using your `dplyr` and `ggplot2` skills. Open the journal article "Riddell_Annals_Hom-Sui-Disparities.pdf". Read the abstract and have a look at Figure 3. The data you need is "CDC_Males.csv".
@@ -395,7 +495,21 @@ You may find these helpful:
 
 ```{r, echo=FALSE}
 # Replicate Figure 3
+male_pop <- vroom::vroom(here::here("data","CDC_Males.csv"))
+glimpse(male_pop)
+```
 
+```{r}
+white_males <- male_pop[is.na(male_pop)] <- 0 
+white_males <- white_males %>%
+  select(ST, adjusted.homicide.White, adjusted.suicide.White, Population.White, gun.house.prev.category) %>%
+  group_by(ST) %>%
+  summarize(total_homicide = sum(adjusted.homicide.White), 
+            total_suicide = sum(adjusted.suicide.White),
+            pop = Population.White,
+            gun_ownership = gun.house.prev.category)
+white_males
+#ggplot(male_pop, aes(x = adjusted.suicide.White, y = adjusted.homicide.White))
 ```
 
 
