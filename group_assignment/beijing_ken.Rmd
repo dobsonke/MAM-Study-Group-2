@@ -54,16 +54,21 @@ beijing_data <- vroom::vroom("http://data.insideairbnb.com/china/beijing/beijing
 ```
 
 ```{r}
-beijing_cleaned <- beijing_data %>% 
+skim(beijing_data)
+
+```
+
+```{r}
+
+#select
+beijing_selected <- beijing_data %>% 
   select(id, 
-         experiences_offered, 
          host_response_time,
          host_response_rate,
          host_acceptance_rate,
          host_is_superhost,
          host_listings_count,
          host_total_listings_count,
-         host_has_profile_pic,
          host_identity_verified,
          neighbourhood,
          neighbourhood_cleansed,
@@ -75,8 +80,6 @@ beijing_cleaned <- beijing_data %>%
          bathrooms,
          bedrooms,
          beds,
-         bed_type,
-         square_feet,
          price,
          security_deposit,
          cleaning_fee,
@@ -94,20 +97,36 @@ beijing_cleaned <- beijing_data %>%
          review_scores_location,
          review_scores_value,
          instant_bookable,
-         is_business_travel_ready,
-         cancellation_policy,,
-         require_guest_phone_verification,
-         require_guest_profile_picture,
+         cancellation_policy,
          reviews_per_month) %>%
   mutate(price = parse_number(price),
          cleaning_fee = parse_number(cleaning_fee),
-         security_deposit = parse_number(security_deposit))
+         security_deposit = parse_number(security_deposit),
+         extra_people = parse_number(extra_people),
+         host_response_rate = parse_number(host_response_rate),
+         host_acceptance_rate = parse_number(host_acceptance_rate))
 ```
 How many variables/columns? How many rows/observations?
+```{r}
+beijing_selected %>%
+  group_by(property_type) %>%
+  count(sort = TRUE)
+```
 
 There are 36283 observations each with 106 columns.
+
 ```{r}
-skim(beijing_data)
+beijing_cleaned <- beijing_selected %>%
+  mutate(prop_type_simplified = case_when(
+    property_type %in% c("Apartment","Condominium", "House","Loft") ~ property_type, 
+    TRUE ~ "Other")) %>%
+  na_if("N/A")
+
+
+
+beijing_cleaned$cleaning_fee[is.na(beijing_cleaned$cleaning_fee)] <- 0
+beijing_cleaned$security_deposit[is.na(beijing_cleaned$security_deposit)] <- 0
+skim(beijing_cleaned)
 ```
 Which variables are numbers?
 
@@ -117,14 +136,52 @@ Which are categorical or factor variables (numeric or character variables with v
 
 What are the correlations between variables? Does each scatterplot support a linear relationship between variables? Do any of the correlations appear to be conditional on the value of a categorical variable?
 ```{r}
-selected <- beijing_data %>%
-  select(price, neighbourhood_cleansed, bathrooms, bedrooms, beds,
-         host_is_superhost, review_scores_rating)
-         
-GGally::ggpairs(selected %>% select(price, bedrooms, bathrooms), cardinality_threshold = 2000)
-```
+#refactor things
+beijing_factored <- beijing_cleaned %>%
+  mutate(host_response_time = fct_relevel(host_response_time,
+                                            "within an hour", 
+                                            "within a few hours",
+                                            "within a day",
+                                            "a few days or more"),
+         cancellation_policy = fct_relevel(cancellation_policy,
+                                           "flexible",
+                                           "moderate",
+                                           "strict_14_with_grace_period"),
+         prop_type_simplified = fct_relevel(prop_type_simplified,
+                                          "Apartment",
+                                          "Condominium",
+                                          "House",
+                                          "Loft",
+                                          "Other"),
+         room_type = fct_relevel(room_type,
+                                 "Shared room",
+                                 "Private room",
+                                 "Entire home/apt"),
+         neighbourhood_cleansed = case_when(
+           neighbourhood_cleansed == "东城区" ~ "Dongcheng",
+           neighbourhood_cleansed == "丰台区 / Fengtai" ~ "Fengtai",
+           neighbourhood_cleansed == "大兴区 / Daxing" ~ "Daxing",
+           neighbourhood_cleansed == "密云县 / Miyun" ~ "Miyun",
+           neighbourhood_cleansed == "平谷区 / Pinggu" ~ "Pinggu",
+           neighbourhood_cleansed == "延庆县 / Yanqing" ~ "Yanqing",
+           neighbourhood_cleansed == "怀柔区 / Huairou" ~ "Huairou",
+           neighbourhood_cleansed == "房山区" ~ "Fangshan",
+           neighbourhood_cleansed == "昌平区" ~ "Changping",
+           neighbourhood_cleansed == "朝阳区 / Chaoyang" ~ "Chaoyang",
+           neighbourhood_cleansed == "海淀区" ~ "Haidian",
+           neighbourhood_cleansed == "石景山区" ~ "Shijingshan",
+           neighbourhood_cleansed == "西城区" ~ "Xicheng",
+           neighbourhood_cleansed == "通州区 / Tongzhou" ~ "Tongzhou",
+           neighbourhood_cleansed == "门头沟区 / Mentougou" ~ "Mentougou",
+           neighbourhood_cleansed == "顺义区 / Shunyi" ~ "Shunyi"),
+         #set neighbourhood as factor
+         neighbourhood_cleansed = as.factor(neighbourhood_cleansed)) %>%
+  select(-neighbourhood, -property_type)
 
+skim(beijing_factored)
+         
+```
 ```{r}
-ggplot(beijing_data, aes(x = price)) +
-  geom_density()
+GGally::ggpairs(beijing_factored%>% select(price, bedrooms, bathrooms), cardinality_threshold = 16)
+
 ```
