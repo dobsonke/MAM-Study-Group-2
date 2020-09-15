@@ -44,7 +44,7 @@ library(openintro)
 library(kableExtra)
 ```
 
-## R Markdown
+## Exploratory Data Analysis
 
 
 ```{r }
@@ -54,5 +54,31 @@ beijing_data <- vroom::vroom("http://data.insideairbnb.com/china/beijing/beijing
 ```
 
 ```{r}
-glimpse(beijing_data)
+beijing_cleaned <- beijing_data %>% 
+  mutate(price = parse_number(price))
+```
+How many variables/columns? How many rows/observations?
+
+There are 36283 observations each with 106 columns.
+```{r}
+skim(beijing_data)
+```
+Which variables are numbers?
+
+41 variables are numeric.
+
+Which are categorical or factor variables (numeric or character variables with variables that have a fixed and known set of possible values?
+
+What are the correlations between variables? Does each scatterplot support a linear relationship between variables? Do any of the correlations appear to be conditional on the value of a categorical variable?
+```{r}
+selected <- beijing_data %>%
+  select(price, neighbourhood_cleansed, bathrooms, bedrooms, beds,
+         host_is_superhost, review_scores_rating)
+         
+GGally::ggpairs(selected %>% select(price, bedrooms, bathrooms), cardinality_threshold = 2000)
+```
+
+```{r}
+ggplot(beijing_data, aes(x = price)) +
+  geom_density()
 ```
